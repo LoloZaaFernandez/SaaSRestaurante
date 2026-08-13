@@ -1,0 +1,1 @@
+export { readTenantId, requireTenantId, register } from './tenants.module.js'

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "incremental": false,
+    "noEmit": true
+  },
+  "include": ["src", "migrations"],
+  "exclude": ["dist", "node_modules"]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "saasrestaurante",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "db:migrate": "pnpm --filter @saasrestaurante/db migrate:up",
+    "db:seed": "pnpm --filter @saasrestaurante/db seed",
+    "db:rls": "pnpm --filter @saasrestaurante/db rls:apply"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^24.0.0"
+  }
+}
