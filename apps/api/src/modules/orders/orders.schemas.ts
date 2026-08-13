@@ -1,24 +1,61 @@
 import { z } from 'zod'
-import { moneySchema } from '../menu/menu.schemas.js'
+import {
+  createOrderSchema,
+  orderItemSchema,
+  orderKitchenStatusSchema,
+  orderSchema,
+  orderStatusSchema,
+  paymentMethodSchema,
+  paymentSchema,
+  moneySchema,
+  type CreateOrder,
+  type Order,
+  type OrderItem,
+  type OrderItemModifier,
+  type OrderItemInput,
+  type OrderKitchenStatus,
+  type OrderStatus,
+  type Payment,
+  type PaymentMethod,
+} from '@saasrestaurante/contracts'
 
-export const orderModifierSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  price: moneySchema.optional(),
-  quantity: z.number().int().positive().default(1),
+export {
+  createOrderSchema,
+  orderItemSchema,
+  orderKitchenStatusSchema,
+  orderSchema,
+  orderStatusSchema,
+  paymentMethodSchema,
+  paymentSchema,
+}
+export type {
+  CreateOrder,
+  Order,
+  OrderItem,
+  OrderItemModifier,
+  OrderItemInput,
+  OrderKitchenStatus,
+  OrderStatus,
+  Payment,
+  PaymentMethod,
+}
+
+export const createPaymentSchema = z.object({
+  method: paymentMethodSchema,
+  amount: moneySchema,
+  tip: moneySchema.default('0.00'),
+  amountReceived: moneySchema.nullable().optional(),
 })
 
-export const orderLineSchema = z.object({
-  menuItemId: z.string().min(1),
-  quantity: z.number().int().positive().default(1),
-  modifiers: z.array(orderModifierSchema).optional(),
+export type CreatePaymentInput = z.infer<typeof createPaymentSchema>
+
+export const setKitchenStatusSchema = z.object({
+  status: orderKitchenStatusSchema,
 })
 
-export const createOrderSchema = z.object({
-  items: z.array(orderLineSchema).min(1),
-  notes: z.string().optional(),
-})
+export type SetKitchenStatusInput = z.infer<typeof setKitchenStatusSchema>
 
-export type OrderModifier = z.infer<typeof orderModifierSchema>
-export type OrderLineInput = z.infer<typeof orderLineSchema>
-export type CreateOrderInput = z.infer<typeof createOrderSchema>
+export interface KitchenOrder extends Order {
+  tableLabel: string | null
+  elapsedSeconds: number
+}

@@ -1,1 +1,1 @@
-export { register } from './health.module.js'
+export { createHealthModule } from './health.module.js'

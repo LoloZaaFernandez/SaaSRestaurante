@@ -1,44 +1,75 @@
-import { randomUUID } from 'node:crypto'
+import type { Pool } from 'pg'
+import { queryOne, withTenant } from '../../shared/db.js'
+import { AppError } from '../../shared/errors.js'
 import type { CreateMenuItemInput, MenuItem } from './menu.schemas.js'
 
-export interface MenuItemRepository {
-  list(tenantId: string): Promise<MenuItem[]>
-  findById(id: string): Promise<MenuItem | null>
-  create(item: MenuItem): Promise<MenuItem>
+interface MenuItemRow {
+  id: string
+  tenant_id: string
+  category_id: string
+  name: string
+  description: string | null
+  price: string
+  active: boolean
+  sort_order: number
 }
 
-export class InMemoryMenuItemRepository implements MenuItemRepository {
-  private readonly items = new Map<string, MenuItem>()
-
-  async list(tenantId: string): Promise<MenuItem[]> {
-    return [...this.items.values()].filter((item) => item.tenantId === tenantId)
-  }
-
-  async findById(id: string): Promise<MenuItem | null> {
-    return this.items.get(id) ?? null
-  }
-
-  async create(item: MenuItem): Promise<MenuItem> {
-    this.items.set(item.id, item)
-    return item
+function mapItem(row: MenuItemRow): MenuItem {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    categoryId: row.category_id,
+    name: row.name,
+    description: row.description,
+    price: row.price,
+    active: row.active,
+    sortOrder: row.sort_order,
   }
 }
 
 export class MenuService {
-  constructor(public readonly repository: MenuItemRepository) {}
+  constructor(private readonly pool: Pool) {}
 
   async list(tenantId: string): Promise<MenuItem[]> {
-    return this.repository.list(tenantId)
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<MenuItemRow>(
+        `SELECT id, tenant_id, category_id, name, description, price, active, sort_order
+         FROM menu_items WHERE active = true
+         ORDER BY sort_order, name`,
+      )
+      return result.rows.map(mapItem)
+    })
+  }
+
+  async findById(tenantId: string, id: string): Promise<MenuItem | null> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const row = await queryOne<MenuItemRow>(
+        client,
+        `SELECT id, tenant_id, category_id, name, description, price, active, sort_order
+         FROM menu_items WHERE id = $1`,
+        [id],
+      )
+      return row ? mapItem(row) : null
+    })
   }
 
   async create(tenantId: string, input: CreateMenuItemInput): Promise<MenuItem> {
-    const item: MenuItem = { ...input, id: `mi_${randomUUID()}`, tenantId }
-    return this.repository.create(item)
-  }
-
-  async findById(id: string): Promise<MenuItem | null> {
-    return this.repository.findById(id)
+    return withTenant(this.pool, tenantId, async (client) => {
+      const category = await queryOne<{ id: string }>(
+        client,
+        'SELECT id FROM menu_categories WHERE id = $1',
+        [input.categoryId],
+      )
+      if (!category) {
+        throw new AppError(404, 'CATEGORY_NOT_FOUND', 'Menu category not found')
+      }
+      const result = await client.query<MenuItemRow>(
+        `INSERT INTO menu_items (tenant_id, category_id, name, description, price, active, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, tenant_id, category_id, name, description, price, active, sort_order`,
+        [tenantId, input.categoryId, input.name, input.description, input.price, input.active, input.sortOrder],
+      )
+      return mapItem(result.rows[0]!)
+    })
   }
 }
-
-export const menuService = new MenuService(new InMemoryMenuItemRepository())

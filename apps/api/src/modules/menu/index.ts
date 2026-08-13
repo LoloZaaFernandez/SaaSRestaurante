@@ -1,17 +1,17 @@
 import type { FastifyInstance } from 'fastify'
-import type { MenuService } from './menu.service.js'
-import { menuService as defaultMenuService } from './menu.service.js'
+import type { Pool } from 'pg'
+import { MenuService } from './menu.service.js'
 import { registerMenuRoutes } from './menu.routes.js'
 
 export interface MenuModuleDeps {
-  menuService?: MenuService
+  pool: Pool
 }
 
-export function createMenuModule(deps: MenuModuleDeps = {}) {
-  const menuService = deps.menuService ?? defaultMenuService
+export function createMenuModule({ pool }: MenuModuleDeps) {
+  const menuService = new MenuService(pool)
   return async function register(app: FastifyInstance): Promise<void> {
     await registerMenuRoutes(app, menuService)
   }
 }
 
-export const register = createMenuModule()
+export type { MenuService } from './menu.service.js'

@@ -1,17 +1,15 @@
 import { z } from 'zod'
+import { menuItemSchema, moneySchema } from '@saasrestaurante/contracts'
 
-export const moneySchema = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Must be a decimal string like "12.90"')
+export { menuItemSchema, moneySchema }
 
-export const menuItemSchema = z.object({
-  id: z.string().min(1),
-  tenantId: z.string().min(1),
-  name: z.string().min(1),
-  description: z.string().default(''),
-  price: moneySchema,
-  category: z.string().min(1),
-})
-
-export const createMenuItemSchema = menuItemSchema.omit({ id: true, tenantId: true })
+export const createMenuItemSchema = menuItemSchema
+  .omit({ id: true, tenantId: true })
+  .extend({
+    description: z.string().nullable().default(null),
+    active: z.boolean().default(true),
+    sortOrder: z.number().int().min(0).default(0),
+  })
 
 export type MenuItem = z.infer<typeof menuItemSchema>
 export type CreateMenuItemInput = z.infer<typeof createMenuItemSchema>

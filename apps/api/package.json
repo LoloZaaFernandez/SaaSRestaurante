@@ -18,12 +18,15 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/jwt": "^9.0.0",
     "@fastify/sensible": "^6.0.0",
+    "@saasrestaurante/contracts": "workspace:*",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.5",
     "fastify": "^5.2.0",
     "pg": "^8.13.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.0",
     "tsx": "^4.19.0",

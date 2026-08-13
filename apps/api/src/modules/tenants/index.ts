@@ -1,1 +1,5 @@
-export { readTenantId, requireTenantId, register } from './tenants.module.js'
+export {
+  readTenantId,
+  requireTenantId,
+  attachTenantContext,
+} from './tenants.module.js'

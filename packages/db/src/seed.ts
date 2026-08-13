@@ -1,10 +1,12 @@
 import 'dotenv/config'
 import { randomUUID } from 'node:crypto'
+import bcrypt from 'bcryptjs'
 import { pool } from './client.js'
 
 const TENANT_ID = '11111111-1111-1111-1111-111111111111'
 const ADMIN_USER_ID = '33333333-3333-3333-3333-333333333333'
 const BRANCH_ID = '44444444-4444-4444-4444-444444444444'
+const DEMO_PASSWORD = 'demo1234'
 
 const CATEGORIES = [
   { id: '22222222-2222-2222-2222-222222222222', name: 'Platos principales', position: 0 },
@@ -60,6 +62,27 @@ async function run(): Promise<void> {
   try {
     await client.query('BEGIN')
 
+    // SECURITY DEFINER auth gateway: lets the API resolve a user by globally-unique
+    // email before a tenant context exists (login). Owned by the seed superuser so
+    // it can bypass RLS; EXECUTE is restricted to the app role.
+    await client.query(`
+      CREATE OR REPLACE FUNCTION auth_find_user_by_email(p_email citext)
+      RETURNS TABLE (id uuid, tenant_id uuid, email citext, password_hash text, full_name text, role text, active boolean)
+      LANGUAGE sql
+      STABLE
+      SECURITY DEFINER
+      SET search_path = public
+      AS $$
+        SELECT u.id, u.tenant_id, u.email, u.password_hash, u.full_name, u.role, u.active
+        FROM public.users u
+        WHERE u.email = p_email
+        LIMIT 1
+      $$;
+
+      REVOKE ALL ON FUNCTION auth_find_user_by_email(citext) FROM PUBLIC;
+      GRANT EXECUTE ON FUNCTION auth_find_user_by_email(citext) TO saas_app;
+    `)
+
     await client.query('SELECT set_app_tenant($1)', [TENANT_ID])
 
     for (const table of [
@@ -89,7 +112,7 @@ async function run(): Promise<void> {
     await client.query(
       `INSERT INTO users (id, tenant_id, email, password_hash, full_name, role, active)
        VALUES ($1, $2, $3, $4, $5, 'admin', true)`,
-      [ADMIN_USER_ID, TENANT_ID, 'admin@demo-restaurante.com', 'dev-only-placeholder-hash', 'Admin Demo'],
+      [ADMIN_USER_ID, TENANT_ID, 'admin@demo-restaurante.com', await bcrypt.hash(DEMO_PASSWORD, 10), 'Admin Demo'],
     )
 
     await client.query(
@@ -159,7 +182,7 @@ async function run(): Promise<void> {
 
     console.log('Seed completed successfully')
     console.log(`  tenant:        ${TENANT_ID} (slug: demo-restaurante)`)
-    console.log(`  admin user:    admin@demo-restaurante.com`)
+    console.log(`  admin user:    admin@demo-restaurante.com (password: ${DEMO_PASSWORD})`)
     console.log(`  branches:      1`)
     console.log(`  categories:    ${CATEGORIES.length}`)
     console.log(`  menu items:    ${MENU_ITEMS.length}`)

@@ -8,9 +8,17 @@ export const userRoleSchema = z.enum(['owner', 'admin', 'waiter', 'kitchen', 'ca
 
 export const tableStatusSchema = z.enum(['free', 'occupied', 'reserved', 'cleaning'])
 
+export const tableKindSchema = z.enum(['mesa', 'barra'])
+
 export const orderStatusSchema = z.enum(['open', 'paid', 'cancelled'])
 
-export const paymentMethodSchema = z.enum(['cash', 'card', 'transfer'])
+export const orderKitchenStatusSchema = z.enum(['pending', 'preparing', 'ready', 'served'])
+
+export const paymentMethodSchema = z.enum(['cash', 'card', 'transfer', 'yape', 'plin'])
+
+export const comprobanteTypeSchema = z.enum(['boleta', 'factura'])
+
+export const invoiceStatusSchema = z.enum(['emitted', 'voided'])
 
 export const tenantSchema = z.object({
   id: z.string().uuid(),
@@ -98,6 +106,7 @@ export const tableSchema = z.object({
   label: z.string().min(1),
   seats: z.number().int().min(1),
   status: tableStatusSchema,
+  kind: tableKindSchema,
 })
 
 export const orderItemInputSchema = z.object({
@@ -127,6 +136,7 @@ export const orderItemSchema = z.object({
   quantity: z.number().int().positive(),
   lineTotal: moneySchema,
   modifiers: z.array(orderItemModifierSnapshotSchema).default([]),
+  notes: z.string().nullable(),
 })
 
 export const orderSchema = z.object({
@@ -135,7 +145,13 @@ export const orderSchema = z.object({
   branchId: z.string().uuid(),
   tableId: z.string().uuid().nullable(),
   status: orderStatusSchema,
+  kitchenStatus: orderKitchenStatusSchema,
   createdBy: z.string().uuid(),
+  waiterId: z.string().uuid().nullable(),
+  subtotal: moneySchema,
+  tax: moneySchema,
+  total: moneySchema,
+  tip: moneySchema,
   openedAt: z.string().datetime(),
   closedAt: z.string().datetime().nullable(),
   items: z.array(orderItemSchema).default([]),
@@ -148,7 +164,32 @@ export const paymentSchema = z.object({
   method: paymentMethodSchema,
   amount: moneySchema,
   tip: moneySchema.default('0.00'),
+  amountReceived: moneySchema.nullable(),
+  change: moneySchema.nullable(),
   receivedAt: z.string().datetime(),
+})
+
+export const invoiceSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  branchId: z.string().uuid(),
+  orderId: z.string().uuid(),
+  comprobanteType: comprobanteTypeSchema,
+  serie: z.string().min(1),
+  numero: z.number().int().positive(),
+  customerDoc: z.enum(['dni', 'ruc']).nullable(),
+  customerDocNumber: z.string().nullable(),
+  customerName: z.string().nullable(),
+  subtotal: moneySchema,
+  tax: moneySchema,
+  tip: moneySchema,
+  total: moneySchema,
+  taxRate: moneySchema,
+  status: invoiceStatusSchema,
+  voidedReason: z.string().nullable(),
+  issuedBy: z.string().uuid(),
+  printedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
 })
 
 export const shiftSchema = z.object({
@@ -177,12 +218,17 @@ export type ModifierGroup = z.infer<typeof modifierGroupSchema>
 export type Modifier = z.infer<typeof modifierSchema>
 export type Table = z.infer<typeof tableSchema>
 export type TableStatus = z.infer<typeof tableStatusSchema>
+export type TableKind = z.infer<typeof tableKindSchema>
 export type Order = z.infer<typeof orderSchema>
 export type OrderItem = z.infer<typeof orderItemSchema>
 export type OrderItemModifier = z.infer<typeof orderItemModifierSnapshotSchema>
 export type OrderItemInput = z.infer<typeof orderItemInputSchema>
 export type CreateOrder = z.infer<typeof createOrderSchema>
 export type OrderStatus = z.infer<typeof orderStatusSchema>
+export type OrderKitchenStatus = z.infer<typeof orderKitchenStatusSchema>
 export type Payment = z.infer<typeof paymentSchema>
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>
+export type Invoice = z.infer<typeof invoiceSchema>
+export type ComprobanteType = z.infer<typeof comprobanteTypeSchema>
+export type InvoiceStatus = z.infer<typeof invoiceStatusSchema>
 export type Shift = z.infer<typeof shiftSchema>

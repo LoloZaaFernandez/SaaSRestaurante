@@ -5,18 +5,22 @@ import fastifyJwt from '@fastify/jwt'
 import { randomUUID } from 'node:crypto'
 import { config } from './shared/config.js'
 import { buildLoggerOptions } from './shared/logger.js'
+import { createPool } from './shared/db.js'
 import { errorHandler, notFoundHandler } from './shared/errors.js'
-import { register as registerTenants } from './modules/tenants/index.js'
-import { register as registerHealth } from './modules/health/index.js'
-import { register as registerAuth } from './modules/auth/index.js'
-import { register as registerMenu } from './modules/menu/index.js'
-import { register as registerOrders } from './modules/orders/index.js'
+import { attachTenantContext } from './modules/tenants/index.js'
+import { createHealthModule } from './modules/health/index.js'
+import { createAuthModule } from './modules/auth/index.js'
+import { createMenuModule } from './modules/menu/index.js'
+import { createOrdersModule } from './modules/orders/index.js'
+import { createInvoicesModule } from './modules/invoices/index.js'
+import { createKdsModule } from './modules/kds/index.js'
 
 export interface AuthPayload {
   sub: string
   email: string
   tenantId: string
   role: string
+  fullName: string
 }
 
 declare module '@fastify/jwt' {
@@ -32,11 +36,17 @@ declare module 'fastify' {
   }
 }
 
-export async function buildApp(): Promise<FastifyInstance> {
+export interface BuildAppOptions {
+  databaseUrl?: string
+}
+
+export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: buildLoggerOptions(),
     genReqId: () => randomUUID(),
   })
+
+  const pool = createPool(opts.databaseUrl ?? config.DATABASE_URL)
 
   await app.register(cors, { origin: true })
   await app.register(sensible)
@@ -55,6 +65,15 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   })
 
+  // Error handlers must be set BEFORE plugin registration: Fastify captures them
+  // into encapsulated plugin contexts at build time, so setting them after the
+  // modules register silently leaves every module route on the default handler.
+  app.setNotFoundHandler(notFoundHandler)
+  app.setErrorHandler(errorHandler)
+
+  // Root-level hook so bearer tokens resolve a tenant context for every route.
+  app.addHook('onRequest', attachTenantContext)
+
   await app.register(async function registerRequestId(instance) {
     instance.addHook('onSend', (request, reply, payload) => {
       reply.header('x-request-id', request.id)
@@ -62,14 +81,16 @@ export async function buildApp(): Promise<FastifyInstance> {
     })
   })
 
-  await app.register(registerTenants)
-  await app.register(registerHealth)
-  await app.register(registerAuth)
-  await app.register(registerMenu)
-  await app.register(registerOrders)
+  await app.register(createHealthModule({ pool }))
+  await app.register(createAuthModule({ pool }))
+  await app.register(createMenuModule({ pool }))
+  await app.register(createOrdersModule({ pool }))
+  await app.register(createInvoicesModule({ pool }))
+  await app.register(createKdsModule({ pool }))
 
-  app.setNotFoundHandler(notFoundHandler)
-  app.setErrorHandler(errorHandler)
+  app.addHook('onClose', async () => {
+    await pool.end()
+  })
 
   return app
 }

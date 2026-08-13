@@ -1,30 +1,26 @@
 import type { FastifyInstance } from 'fastify'
-import { Pool } from 'pg'
-import { config } from '../../shared/config.js'
+import type { Pool } from 'pg'
 
-export async function register(app: FastifyInstance): Promise<void> {
-  const pool = new Pool({
-    connectionString: config.DATABASE_URL,
-    connectionTimeoutMillis: 1000,
-  })
+export interface HealthModuleDeps {
+  pool: Pool
+}
 
-  app.get('/health', async (request, reply) => {
-    try {
-      const client = await pool.connect()
+export function createHealthModule({ pool }: HealthModuleDeps) {
+  return async function register(app: FastifyInstance): Promise<void> {
+    app.get('/health', async (request, reply) => {
       try {
-        await client.query('SELECT 1')
-      } finally {
-        client.release()
+        const client = await pool.connect()
+        try {
+          await client.query('SELECT 1')
+        } finally {
+          client.release()
+        }
+        return { status: 'ok', db: 'up' }
+      } catch (err) {
+        request.log.warn({ err }, 'health db ping failed')
+        reply.code(503)
+        return { status: 'error', db: 'down' }
       }
-      return { status: 'ok', db: 'up' }
-    } catch (err) {
-      request.log.warn({ err }, 'health db ping failed')
-      reply.code(503)
-      return { status: 'error', db: 'down' }
-    }
-  })
-
-  app.addHook('onClose', async () => {
-    await pool.end()
-  })
+    })
+  }
 }

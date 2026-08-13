@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyRequest } from 'fastify'
 import { AppError } from '../../shared/errors.js'
 
 interface TenantPayload {
@@ -21,16 +21,17 @@ export function requireTenantId(request: FastifyRequest): string {
   return tenantId
 }
 
-export async function register(app: FastifyInstance): Promise<void> {
-  app.addHook('onRequest', async (request) => {
-    const authorization = request.headers.authorization
-    if (!authorization) {
-      return
-    }
-    try {
-      await request.jwtVerify()
-    } catch {
-      // invalid or expired token: public routes continue unauthenticated
-    }
-  })
+// Root-level onRequest hook: populates request.user from a valid Bearer token so
+// routes that rely on readTenantId work. Registered on the root instance in app.ts
+// because Fastify scopes hooks inside plugins to that plugin's routes only.
+export async function attachTenantContext(request: FastifyRequest): Promise<void> {
+  const authorization = request.headers.authorization
+  if (!authorization) {
+    return
+  }
+  try {
+    await request.jwtVerify()
+  } catch {
+    // invalid or expired token: public routes continue unauthenticated
+  }
 }

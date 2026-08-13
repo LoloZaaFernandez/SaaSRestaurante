@@ -1,18 +1,20 @@
 import type { FastifyInstance } from 'fastify'
+import type { Pool } from 'pg'
+import { UsersRepository } from './users.repository.js'
 import { AuthService } from './auth.service.js'
 import { registerAuthRoutes } from './auth.routes.js'
 
 export interface AuthModuleDeps {
-  authService?: AuthService
+  pool: Pool
 }
 
-export function createAuthModule(deps: AuthModuleDeps = {}) {
-  const authService = deps.authService ?? new AuthService()
+export function createAuthModule({ pool }: AuthModuleDeps) {
+  const usersRepository = new UsersRepository(pool)
+  const authService = new AuthService(usersRepository)
   return async function register(app: FastifyInstance): Promise<void> {
     await registerAuthRoutes(app, authService)
   }
 }
 
-export const register = createAuthModule()
-
-export type { AuthService, AuthUser, PublicUser } from './auth.service.js'
+export type { AuthService, PublicUser } from './auth.service.js'
+export type { UserRole, UserRow } from './users.repository.js'
