@@ -26,7 +26,7 @@ This boots Postgres 16 with `user=saas`, `password=saas`, database `saas_restaur
 cp .env.example .env
 ```
 
-`DATABASE_URL=postgres://saas:saas@localhost:5432/saas_restaurante`
+`DATABASE_URL=postgres://saas:saas@localhost:5433/saas_restaurante`
 
 ### 3. Run migrations
 

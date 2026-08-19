@@ -20,7 +20,7 @@ El sistema se divide en tres capas bien delimitadas, donde los datos fluyen desd
 └────────────────────────────┬─────────────────────────────────┘
                              │  pg (postgres) — conexión como rol saas_app
 ┌────────────────────────────▼─────────────────────────────────┐
-│  PostgreSQL 16 — multitenant con RLS                      :5432│
+│  PostgreSQL 16 — multitenant con RLS                      :5433│
 │  tenant_id por tabla · get_tenant_id() · set_app_tenant()     │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -82,7 +82,7 @@ cp packages/db/.env.example packages/db/.env
 Valores de referencia para `apps/api/.env`:
 
 ```dotenv
-DATABASE_URL=postgres://saas_app:saas_app@localhost:5432/saas_restaurante
+DATABASE_URL=postgres://saas_app:saas_app@localhost:5433/saas_restaurante
 JWT_SECRET=una-clave-secreta-de-desarrollo
 PORT=3001
 NODE_ENV=development
@@ -93,7 +93,7 @@ NODE_ENV=development
 En `apps/api/.env` el `DATABASE_URL` apunta a `saas_app:saas_app`. Y en `packages/db/.env`:
 
 ```dotenv
-DATABASE_URL=postgres://saas:saas@localhost:5432/saas_restaurante
+DATABASE_URL=postgres://saas:saas@localhost:5433/saas_restaurante
 ```
 
 Para `apps/web/.env`:
@@ -110,7 +110,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 docker compose up -d
 ```
 
-Levanta PostgreSQL 16 (usuario/pass/db: `saas`/`saas`/`saas_restaurante`, puerto `5432`, volumen nombrado y healthcheck) y Adminer en `http://localhost:8080`. El puerto 5432 debe estar libre — si tenés otro PostgreSQL corriendo, detené ese contenedor o remapeá el puerto en `docker-compose.yml`.
+Levanta PostgreSQL 16 (usuario/pass/db: `saas`/`saas`/`saas_restaurante`, puerto local `5433`, volumen nombrado y healthcheck) y Adminer en `http://localhost:8080`. El contenedor usa el puerto interno 5432 y se publica como 5433 para evitar conflictos con PostgreSQL local.
 
 ### 3. Instalar dependencias
 
@@ -200,5 +200,5 @@ La documentación técnica vive en `docs/`, una **vault de Obsidian** que no for
 - **`migrate.config.ts`**: node-pg-migrate carga `dotenv` desde una config TS; conservá el flag `-f migrate.config.ts` en los scripts de `packages/db`.
 - **`pnpm-workspace.yaml` con `allowBuilds`**: pnpm 11 requiere aprobar scripts de build nativos (`esbuild`, `sharp`) explícitamente; no agregar dependencias con build scripts sin declararlas ahí.
 - **Bug de Fastify 5 durante el setup**: registrar un `addHook` directamente sobre la instancia raíz que llame a `reply.header()` y luego `app.inject()` cuelga el proceso. Los hooks que setean headers deben declararse dentro de un plugin.
-- **Auth es un esqueleto**: el decorator/guard de JWT funciona, pero el login está mockeado — devuelve 401 para las credenciales del seed hasta que se conecte a la base real.
-- **Puerto 5432 ocupado**: si otro proyecto ya tiene PostgreSQL, `docker compose up -d` falla. Detené ese contenedor o remapeá el puerto en `docker-compose.yml`.
+- **Auth**: el login utiliza la base real y devuelve un JWT con el tenant del usuario.
+- **Puerto PostgreSQL**: Docker publica PostgreSQL en `5433` para evitar conflictos con otra instancia local.
