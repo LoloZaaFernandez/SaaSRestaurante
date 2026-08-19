@@ -11,6 +11,22 @@ export type MenuItem = {
   sortOrder: number;
 };
 
+export type MenuCategory = {
+  id: string;
+  tenantId: string;
+  name: string;
+  position: number;
+};
+
+export type ModifierGroup = {
+  id: string;
+  tenantId: string;
+  name: string;
+  required: boolean;
+  min: number;
+  max: number;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
