@@ -3,12 +3,27 @@ import type { MenuService } from './menu.service.js'
 import {
   createMenuCategorySchema,
   createMenuItemSchema,
+  createModifierGroupSchema,
+  assignModifierGroupsSchema,
   updateMenuCategorySchema,
   updateMenuItemSchema,
 } from './menu.schemas.js'
 import { readTenantId, requireTenantId } from '../tenants/tenants.module.js'
 
 export async function registerMenuRoutes(app: FastifyInstance, menuService: MenuService): Promise<void> {
+  app.get('/menu/modifier-groups', { onRequest: [app.authenticate] }, async (request) => {
+    const tenantId = requireTenantId(request)
+    const modifierGroups = await menuService.listModifierGroups(tenantId)
+    return { modifierGroups }
+  })
+
+  app.post('/menu/modifier-groups', { onRequest: [app.authenticate] }, async (request, reply) => {
+    const tenantId = requireTenantId(request)
+    const input = createModifierGroupSchema.parse(request.body)
+    const modifierGroup = await menuService.createModifierGroup(tenantId, input)
+    return reply.code(201).send({ modifierGroup })
+  })
+
   app.get('/menu/categories', { onRequest: [app.authenticate] }, async (request) => {
     const tenantId = requireTenantId(request)
     const categories = await menuService.listCategories(tenantId)
@@ -63,5 +78,13 @@ export async function registerMenuRoutes(app: FastifyInstance, menuService: Menu
     const { id } = request.params as { id: string }
     const item = await menuService.deactivate(tenantId, id)
     return { item }
+  })
+
+  app.put('/menu/items/:id/modifier-groups', { onRequest: [app.authenticate] }, async (request) => {
+    const tenantId = requireTenantId(request)
+    const { id } = request.params as { id: string }
+    const input = assignModifierGroupsSchema.parse(request.body)
+    await menuService.assignModifierGroups(tenantId, id, input)
+    return { ok: true }
   })
 }

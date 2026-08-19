@@ -6,6 +6,9 @@ import type {
   CreateMenuItemInput,
   MenuCategory,
   MenuItem,
+  ModifierGroup,
+  CreateModifierGroupInput,
+  AssignModifierGroupsInput,
   UpdateMenuCategoryInput,
   UpdateMenuItemInput,
 } from './menu.schemas.js'
@@ -26,6 +29,26 @@ interface MenuCategoryRow {
   tenant_id: string
   name: string
   position: number
+}
+
+interface ModifierGroupRow {
+  id: string
+  tenant_id: string
+  name: string
+  required: boolean
+  min: number
+  max: number
+}
+
+function mapModifierGroup(row: ModifierGroupRow): ModifierGroup {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    name: row.name,
+    required: row.required,
+    min: row.min,
+    max: row.max,
+  }
 }
 
 function mapCategory(row: MenuCategoryRow): MenuCategory {
@@ -72,6 +95,59 @@ export class MenuService {
          ORDER BY position, name`,
       )
       return result.rows.map(mapCategory)
+    })
+  }
+
+  async listModifierGroups(tenantId: string): Promise<ModifierGroup[]> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<ModifierGroupRow>(
+        `SELECT id, tenant_id, name, required, min, max
+         FROM modifier_groups
+         ORDER BY name`,
+      )
+      return result.rows.map(mapModifierGroup)
+    })
+  }
+
+  async createModifierGroup(tenantId: string, input: CreateModifierGroupInput): Promise<ModifierGroup> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<ModifierGroupRow>(
+        `INSERT INTO modifier_groups (tenant_id, name, required, min, max)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, tenant_id, name, required, min, max`,
+        [tenantId, input.name, input.required, input.min, input.max],
+      )
+      return mapModifierGroup(result.rows[0]!)
+    })
+  }
+
+  async assignModifierGroups(tenantId: string, itemId: string, input: AssignModifierGroupsInput): Promise<void> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const item = await queryOne<{ id: string }>(
+        client,
+        'SELECT id FROM menu_items WHERE id = $1',
+        [itemId],
+      )
+      if (!item) {
+        throw new AppError(404, 'MENU_ITEM_NOT_FOUND', 'Menu item not found')
+      }
+      if (input.modifierGroupIds.length > 0) {
+        const groups = await client.query<{ id: string }>(
+          'SELECT id FROM modifier_groups WHERE id = ANY($1::uuid[])',
+          [input.modifierGroupIds],
+        )
+        if (groups.rowCount !== input.modifierGroupIds.length) {
+          throw new AppError(404, 'MODIFIER_GROUP_NOT_FOUND', 'Modifier group not found')
+        }
+      }
+      await client.query('DELETE FROM menu_item_modifiers WHERE menu_item_id = $1', [itemId])
+      for (const groupId of input.modifierGroupIds) {
+        await client.query(
+          `INSERT INTO menu_item_modifiers (tenant_id, menu_item_id, modifier_group_id)
+           VALUES ($1, $2, $3)`,
+          [tenantId, itemId, groupId],
+        )
+      }
     })
   }
 

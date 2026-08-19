@@ -283,6 +283,42 @@ describe.runIf(dbReachable)('real db integration', () => {
     }
   })
 
+  it('admin can create modifier groups and assign them to an item', async () => {
+    const app = await buildApp()
+    try {
+      const token = await login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
+      const headers = authedHeaders(token)
+      const menu = await app.inject({ method: 'GET', url: '/menu/items', headers })
+      const item = (menu.json() as { items: Array<{ id: string }> }).items[0]
+      expect(item).toBeDefined()
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/menu/modifier-groups',
+        headers,
+        payload: { name: `Test modifiers ${randomUUID()}`, required: false, min: 0, max: 2 },
+      })
+      expect(created.statusCode).toBe(201)
+      const group = (created.json() as { modifierGroup: { id: string; max: number } }).modifierGroup
+      expect(group.max).toBe(2)
+
+      const assigned = await app.inject({
+        method: 'PUT',
+        url: `/menu/items/${item!.id}/modifier-groups`,
+        headers,
+        payload: { modifierGroupIds: [group.id] },
+      })
+      expect(assigned.statusCode).toBe(200)
+      expect(assigned.json()).toEqual({ ok: true })
+
+      const listed = await app.inject({ method: 'GET', url: '/menu/modifier-groups', headers })
+      expect(listed.statusCode).toBe(200)
+      expect((listed.json() as { modifierGroups: Array<{ id: string }> }).modifierGroups.some((entry) => entry.id === group.id)).toBe(true)
+    } finally {
+      await app.close()
+    }
+  })
+
   it('menu → order → payment → invoice → void → kitchen full flow', async () => {
     const app = await buildApp()
     try {
