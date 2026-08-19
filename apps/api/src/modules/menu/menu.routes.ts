@@ -54,7 +54,8 @@ export async function registerMenuRoutes(app: FastifyInstance, menuService: Menu
         message: 'Tenant context required',
       })
     }
-    const items = await menuService.list(tenantId)
+    const query = request.query as { includeInactive?: string }
+    const items = await menuService.list(tenantId, query.includeInactive === 'true')
     return { items }
   })
 
@@ -86,5 +87,12 @@ export async function registerMenuRoutes(app: FastifyInstance, menuService: Menu
     const input = assignModifierGroupsSchema.parse(request.body)
     await menuService.assignModifierGroups(tenantId, id, input)
     return { ok: true }
+  })
+
+  app.get('/menu/items/:id/modifier-groups', { onRequest: [app.authenticate] }, async (request) => {
+    const tenantId = requireTenantId(request)
+    const { id } = request.params as { id: string }
+    const modifierGroupIds = await menuService.listAssignedModifierGroups(tenantId, id)
+    return { modifierGroupIds }
   })
 }

@@ -76,11 +76,11 @@ function mapItem(row: MenuItemRow): MenuItem {
 export class MenuService {
   constructor(private readonly pool: Pool) {}
 
-  async list(tenantId: string): Promise<MenuItem[]> {
+  async list(tenantId: string, includeInactive = false): Promise<MenuItem[]> {
     return withTenant(this.pool, tenantId, async (client) => {
       const result = await client.query<MenuItemRow>(
         `SELECT id, tenant_id, category_id, name, description, price, active, sort_order
-         FROM menu_items WHERE active = true
+         FROM menu_items ${includeInactive ? '' : 'WHERE active = true'}
          ORDER BY sort_order, name`,
       )
       return result.rows.map(mapItem)
@@ -148,6 +148,20 @@ export class MenuService {
           [tenantId, itemId, groupId],
         )
       }
+    })
+  }
+
+  async listAssignedModifierGroups(tenantId: string, itemId: string): Promise<string[]> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<{ modifier_group_id: string }>(
+        `SELECT mim.modifier_group_id
+         FROM menu_item_modifiers mim
+         JOIN menu_items mi ON mi.id = mim.menu_item_id AND mi.tenant_id = mim.tenant_id
+         WHERE mim.tenant_id = $1 AND mim.menu_item_id = $2
+         ORDER BY mim.modifier_group_id`,
+        [tenantId, itemId],
+      )
+      return result.rows.map((row) => row.modifier_group_id)
     })
   }
 
