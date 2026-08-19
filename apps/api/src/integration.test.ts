@@ -3,7 +3,7 @@ import { Pool } from 'pg'
 import { randomUUID } from 'node:crypto'
 import { withTenant, type Queryable } from './shared/db.js'
 
-const DATABASE_URL = 'postgres://saas_app:saas_app@localhost:5432/saas_restaurante'
+const DATABASE_URL = 'postgres://saas_app:saas_app@localhost:5433/saas_restaurante'
 process.env.DATABASE_URL = DATABASE_URL
 process.env.JWT_SECRET = 'test-secret'
 process.env.NODE_ENV = 'test'
@@ -188,6 +188,59 @@ describe.runIf(dbReachable)('real db integration', () => {
         payload: { email: waiterEmail, password: 'supersecret1', fullName: 'Duplicate', role: 'kitchen' },
       })
       expect(res.statusCode).toBe(409)
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('admin can update and soft-delete a menu item', async () => {
+    const app = await buildApp()
+    try {
+      const token = await login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
+      const headers = authedHeaders(token)
+      const categoryId = await fixture(async (client) => {
+        const result = await client.query<{ id: string }>(
+          'SELECT id FROM menu_categories WHERE tenant_id = $1 ORDER BY position, name LIMIT 1',
+          [SEED_TENANT_ID],
+        )
+        expect(result.rows[0]).toBeDefined()
+        return result.rows[0]!.id
+      })
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/menu/items',
+        headers,
+        payload: { categoryId, name: `Test item ${randomUUID()}`, price: '9.90' },
+      })
+      expect(created.statusCode).toBe(201)
+      const item = (created.json() as { item: { id: string; name: string; price: string; active: boolean } }).item
+
+      const updated = await app.inject({
+        method: 'PATCH',
+        url: `/menu/items/${item.id}`,
+        headers,
+        payload: { name: 'Updated test item', price: '10.50', active: true },
+      })
+      expect(updated.statusCode).toBe(200)
+      expect((updated.json() as { item: typeof item }).item).toMatchObject({
+        id: item.id,
+        name: 'Updated test item',
+        price: '10.50',
+        active: true,
+      })
+
+      const deleted = await app.inject({
+        method: 'DELETE',
+        url: `/menu/items/${item.id}`,
+        headers: { authorization: headers.authorization },
+      })
+      expect(deleted.statusCode).toBe(200)
+      expect((deleted.json() as { item: { active: boolean } }).item.active).toBe(false)
+
+      const listed = await app.inject({ method: 'GET', url: '/menu/items', headers })
+      expect(listed.statusCode).toBe(200)
+      expect((listed.json() as { items: Array<{ id: string }> }).items.some((entry) => entry.id === item.id)).toBe(false)
     } finally {
       await app.close()
     }

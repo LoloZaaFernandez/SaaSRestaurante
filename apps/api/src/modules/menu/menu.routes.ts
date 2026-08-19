@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { MenuService } from './menu.service.js'
-import { createMenuItemSchema } from './menu.schemas.js'
+import { createMenuItemSchema, updateMenuItemSchema } from './menu.schemas.js'
 import { readTenantId, requireTenantId } from '../tenants/tenants.module.js'
 
 export async function registerMenuRoutes(app: FastifyInstance, menuService: MenuService): Promise<void> {
@@ -22,5 +22,20 @@ export async function registerMenuRoutes(app: FastifyInstance, menuService: Menu
     const input = createMenuItemSchema.parse(request.body)
     const item = await menuService.create(tenantId, input)
     return reply.code(201).send({ item })
+  })
+
+  app.patch('/menu/items/:id', { onRequest: [app.authenticate] }, async (request) => {
+    const tenantId = requireTenantId(request)
+    const { id } = request.params as { id: string }
+    const input = updateMenuItemSchema.parse(request.body)
+    const item = await menuService.update(tenantId, id, input)
+    return { item }
+  })
+
+  app.delete('/menu/items/:id', { onRequest: [app.authenticate] }, async (request) => {
+    const tenantId = requireTenantId(request)
+    const { id } = request.params as { id: string }
+    const item = await menuService.deactivate(tenantId, id)
+    return { item }
   })
 }

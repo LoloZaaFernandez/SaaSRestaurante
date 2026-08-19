@@ -1,7 +1,7 @@
 import type { Pool } from 'pg'
 import { queryOne, withTenant } from '../../shared/db.js'
 import { AppError } from '../../shared/errors.js'
-import type { CreateMenuItemInput, MenuItem } from './menu.schemas.js'
+import type { CreateMenuItemInput, MenuItem, UpdateMenuItemInput } from './menu.schemas.js'
 
 interface MenuItemRow {
   id: string
@@ -71,5 +71,29 @@ export class MenuService {
       )
       return mapItem(result.rows[0]!)
     })
+  }
+
+  async update(tenantId: string, id: string, input: UpdateMenuItemInput): Promise<MenuItem> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<MenuItemRow>(
+        `UPDATE menu_items
+         SET name = COALESCE($3, name),
+             price = COALESCE($4, price),
+             active = COALESCE($5, active),
+             updated_at = now()
+         WHERE id = $1 AND tenant_id = $2
+         RETURNING id, tenant_id, category_id, name, description, price, active, sort_order`,
+        [id, tenantId, input.name ?? null, input.price ?? null, input.active ?? null],
+      )
+      const row = result.rows[0]
+      if (!row) {
+        throw new AppError(404, 'MENU_ITEM_NOT_FOUND', 'Menu item not found')
+      }
+      return mapItem(row)
+    })
+  }
+
+  async deactivate(tenantId: string, id: string): Promise<MenuItem> {
+    return this.update(tenantId, id, { active: false })
   }
 }
