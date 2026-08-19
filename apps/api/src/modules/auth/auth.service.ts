@@ -20,10 +20,15 @@ export interface PublicUser {
 export class AuthService {
   private readonly users: AuthUser[] = [
     {
-      id: 'usr_1',
-      email: 'admin@saas.local',
+      // Alineado con el seed de packages/db (tenant y usuario del demo):
+      // - tenantId coincide con el tenant sembrado en la migración/seed.
+      // - email coincide con el usuario admin del seed.
+      // Sin esto, el JWT llevaría un tenant inexistente y el dashboard
+      // (RLS por tenant) respondería siempre con ceros.
+      id: '33333333-3333-3333-3333-333333333333',
+      email: 'admin@demo-restaurante.com',
       password: 'admin123',
-      tenantId: 'tnt_demo',
+      tenantId: '11111111-1111-1111-1111-111111111111',
       role: 'owner',
     },
   ]

@@ -15,7 +15,7 @@ El sistema se divide en tres capas bien delimitadas, donde los datos fluyen desd
                              │  de packages/contracts
 ┌────────────────────────────▼─────────────────────────────────┐
 │  apps/api — Fastify 5                                    :3001│
-│  modules/tenants · auth · menu · orders · health              │
+│  modules/tenants · auth · menu · orders · analytics · health      │
 │  routes (HTTP) → services (casos de uso) → repositories        │
 └────────────────────────────┬─────────────────────────────────┘
                              │  pg (postgres) — conexión como rol saas_app
@@ -44,11 +44,11 @@ saasrestaurante/
 │   │   └── app/              #   Rutas: dashboard, menu, tables, orders, caja, ajustes, login
 │   └── api/                  # Backend Fastify 5 con Screaming Architecture
 │       └── src/
-│           ├── modules/      # Módulos de dominio: tenants, auth, menu, orders, health
+│           ├── modules/      # Módulos de dominio: tenants, auth, menu, orders, analytics, health
 │           └── shared/       # Config, env, logger, errores comunes
 ├── packages/
 │   ├── db/                   # Migraciones, seed y helpers RLS (node-pg-migrate)
-│   │   ├── migrations/       # 11 migraciones numeradas (1_extensions … 11_app_role)
+│   │   ├── migrations/       # 12 migraciones numeradas (1_extensions … 12_analytics)
 │   │   └── src/              # seed.ts, rls.ts, helpers de tenant
 │   └── contracts/            # Schemas zod compartidos (tipos vía z.infer) — sin deps de runtime
 ├── docs/                     # Vault Obsidian: ADRs, arquitectura, módulos, runbooks (no compila)
@@ -153,7 +153,7 @@ El aislamiento entre tenants se resuelve en la base de datos, no en la aplicaci�
 - La API se conecta con el rol **`saas_app`** (creado en la migración 11), un rol no superusuario. Esto es obligatorio: los superusuarios — y los dueños de tablas — **eluden RLS incluso con FORCE**, de modo que el rol de la aplicación tiene que ser no superusuario para que el aislamiento surta efecto.
 - Patrón de acceso: `BEGIN → set_app_tenant(tenantId) → queries → COMMIT`. El setting es local de la transacción, por lo que un error o un `ROLLBACK` no contaminan conexiones posteriores.
 
-Migraciones (ordenadas): `1_extensions`, `2_tenants`, `3_users`, `4_branches`, `5_menu`, `6_tables`, `7_orders`, `8_payments`, `9_shifts`, `10_rls`, `11_app_role`.
+Migraciones (ordenadas): `1_extensions`, `2_tenants`, `3_users`, `4_branches`, `5_menu`, `6_tables`, `7_orders`, `8_payments`, `9_shifts`, `10_rls`, `11_app_role`, `12_analytics` (views de agregación del dashboard: `v_daily_sales`, `v_top_items`, `v_table_occupancy`, e índices para las agregaciones).
 
 ### Referencia del seed
 
@@ -200,5 +200,5 @@ La documentación técnica vive en `docs/`, una **vault de Obsidian** que no for
 - **`migrate.config.ts`**: node-pg-migrate carga `dotenv` desde una config TS; conservá el flag `-f migrate.config.ts` en los scripts de `packages/db`.
 - **`pnpm-workspace.yaml` con `allowBuilds`**: pnpm 11 requiere aprobar scripts de build nativos (`esbuild`, `sharp`) explícitamente; no agregar dependencias con build scripts sin declararlas ahí.
 - **Bug de Fastify 5 durante el setup**: registrar un `addHook` directamente sobre la instancia raíz que llame a `reply.header()` y luego `app.inject()` cuelga el proceso. Los hooks que setean headers deben declararse dentro de un plugin.
-- **Auth es un esqueleto**: el decorator/guard de JWT funciona, pero el login está mockeado — devuelve 401 para las credenciales del seed hasta que se conecte a la base real.
+- **Auth es un esqueleto**: el decorator/guard de JWT funciona y el login devuelve un JWT real, pero valida contra un usuario mock en memoria, no contra la DB. Las credenciales demo son `admin@demo-restaurante.com` / `admin123`; su `tenantId` coincide con el seed para que el dashboard muestre datos bajo RLS. Falta conectar la autenticación a `users` (hash de contraseña) para producción.
 - **Puerto 5432 ocupado**: si otro proyecto ya tiene PostgreSQL, `docker compose up -d` falla. Detené ese contenedor o remapeá el puerto en `docker-compose.yml`.

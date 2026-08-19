@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-process.env.DATABASE_URL = 'postgres://saas:saas@localhost:5432/saas_restaurante'
+process.env.DATABASE_URL = 'postgres://saas:saas@localhost:5433/saas_restaurante'
 process.env.JWT_SECRET = 'test-secret'
 process.env.NODE_ENV = 'test'
 
 const { buildApp } = await import('./app.js')
 
 describe('api smoke', () => {
-  it('GET /health returns degraded when database is unreachable', async () => {
+  it('GET /health reports ok when the database is reachable', async () => {
     const app = await buildApp()
     const res = await app.inject({ method: 'GET', url: '/health' })
-    expect(res.statusCode).toBe(503)
-    expect(res.json()).toMatchObject({ status: 'error', db: 'down' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ status: 'ok', db: 'up' })
     await app.close()
   })
 
@@ -28,7 +28,7 @@ describe('api smoke', () => {
     const login = await app.inject({
       method: 'POST',
       url: '/auth/login',
-      payload: { email: 'admin@saas.local', password: 'admin123' },
+      payload: { email: 'admin@demo-restaurante.com', password: 'admin123' },
     })
     expect(login.statusCode).toBe(200)
     const token = login.json().token as string

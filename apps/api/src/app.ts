@@ -11,6 +11,7 @@ import { register as registerHealth } from './modules/health/index.js'
 import { register as registerAuth } from './modules/auth/index.js'
 import { register as registerMenu } from './modules/menu/index.js'
 import { register as registerOrders } from './modules/orders/index.js'
+import { register as registerAnalytics } from './modules/analytics/index.js'
 
 export interface AuthPayload {
   sub: string
@@ -42,6 +43,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(sensible)
   await app.register(fastifyJwt, { secret: config.JWT_SECRET })
 
+  // Se registran ANTES de los módulos: en Fastify las rutas capturan el errorHandler
+  // y el notFoundHandler del contexto en el momento del registro (context.js/route.js),
+  // así que setearlos después no los aplica a los módulos ya registrados.
+  app.setNotFoundHandler(notFoundHandler)
+  app.setErrorHandler(errorHandler)
+
   app.decorate('authenticate', async (request, reply) => {
     try {
       await request.jwtVerify()
@@ -67,9 +74,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerAuth)
   await app.register(registerMenu)
   await app.register(registerOrders)
-
-  app.setNotFoundHandler(notFoundHandler)
-  app.setErrorHandler(errorHandler)
+  await app.register(registerAnalytics)
 
   return app
 }

@@ -46,7 +46,9 @@ export default function LoginPage() {
       </div>
 
       <h1 className="text-xl font-semibold text-stone-900">Iniciar sesión</h1>
-      <p className="mt-1 text-sm text-stone-500">Usá cualquier email y contraseña (demo).</p>
+      <p className="mt-1 text-sm text-stone-500">
+        Demo: <span className="font-medium text-stone-700">admin@demo-restaurante.com</span> / admin123
+      </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <label className="block">
