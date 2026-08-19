@@ -195,6 +195,7 @@ describe.runIf(dbReachable)('real db integration', () => {
 
   it('admin can update and soft-delete a menu item', async () => {
     const app = await buildApp()
+    let itemId = ''
     try {
       const token = await login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
       const headers = authedHeaders(token)
@@ -215,6 +216,7 @@ describe.runIf(dbReachable)('real db integration', () => {
       })
       expect(created.statusCode).toBe(201)
       const item = (created.json() as { item: { id: string; name: string; price: string; active: boolean } }).item
+      itemId = item.id
 
       const updated = await app.inject({
         method: 'PATCH',
@@ -242,12 +244,16 @@ describe.runIf(dbReachable)('real db integration', () => {
       expect(listed.statusCode).toBe(200)
       expect((listed.json() as { items: Array<{ id: string }> }).items.some((entry) => entry.id === item.id)).toBe(false)
     } finally {
+      if (itemId) {
+        await fixture((client) => client.query('DELETE FROM menu_items WHERE id = $1', [itemId]))
+      }
       await app.close()
     }
   })
 
   it('admin can create and rename a menu category', async () => {
     const app = await buildApp()
+    let categoryId = ''
     try {
       const token = await login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
       const headers = authedHeaders(token)
@@ -261,6 +267,7 @@ describe.runIf(dbReachable)('real db integration', () => {
       })
       expect(created.statusCode).toBe(201)
       const category = (created.json() as { category: { id: string; name: string; position: number } }).category
+      categoryId = category.id
       expect(category).toMatchObject({ name, position: 99 })
 
       const renamed = await app.inject({
@@ -279,18 +286,24 @@ describe.runIf(dbReachable)('real db integration', () => {
       expect(listed.statusCode).toBe(200)
       expect((listed.json() as { categories: Array<{ id: string }> }).categories.some((entry) => entry.id === category.id)).toBe(true)
     } finally {
+      if (categoryId) {
+        await fixture((client) => client.query('DELETE FROM menu_categories WHERE id = $1', [categoryId]))
+      }
       await app.close()
     }
   })
 
   it('admin can create modifier groups and assign them to an item', async () => {
     const app = await buildApp()
+    let groupId = ''
+    let itemId = ''
     try {
       const token = await login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
       const headers = authedHeaders(token)
       const menu = await app.inject({ method: 'GET', url: '/menu/items', headers })
       const item = (menu.json() as { items: Array<{ id: string }> }).items[0]
       expect(item).toBeDefined()
+      itemId = item!.id
 
       const created = await app.inject({
         method: 'POST',
@@ -300,6 +313,7 @@ describe.runIf(dbReachable)('real db integration', () => {
       })
       expect(created.statusCode).toBe(201)
       const group = (created.json() as { modifierGroup: { id: string; max: number } }).modifierGroup
+      groupId = group.id
       expect(group.max).toBe(2)
 
       const assigned = await app.inject({
@@ -315,6 +329,10 @@ describe.runIf(dbReachable)('real db integration', () => {
       expect(listed.statusCode).toBe(200)
       expect((listed.json() as { modifierGroups: Array<{ id: string }> }).modifierGroups.some((entry) => entry.id === group.id)).toBe(true)
     } finally {
+      if (groupId) {
+        await fixture((client) => client.query('DELETE FROM menu_item_modifiers WHERE modifier_group_id = $1', [groupId]))
+        await fixture((client) => client.query('DELETE FROM modifier_groups WHERE id = $1', [groupId]))
+      }
       await app.close()
     }
   })
