@@ -246,6 +246,43 @@ describe.runIf(dbReachable)('real db integration', () => {
     }
   })
 
+  it('admin can create and rename a menu category', async () => {
+    const app = await buildApp()
+    try {
+      const token = await login(app, ADMIN_EMAIL, ADMIN_PASSWORD)
+      const headers = authedHeaders(token)
+      const name = `Test category ${randomUUID()}`
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/menu/categories',
+        headers,
+        payload: { name, position: 99 },
+      })
+      expect(created.statusCode).toBe(201)
+      const category = (created.json() as { category: { id: string; name: string; position: number } }).category
+      expect(category).toMatchObject({ name, position: 99 })
+
+      const renamed = await app.inject({
+        method: 'PATCH',
+        url: `/menu/categories/${category.id}`,
+        headers,
+        payload: { name: 'Renamed test category' },
+      })
+      expect(renamed.statusCode).toBe(200)
+      expect((renamed.json() as { category: { id: string; name: string } }).category).toMatchObject({
+        id: category.id,
+        name: 'Renamed test category',
+      })
+
+      const listed = await app.inject({ method: 'GET', url: '/menu/categories', headers })
+      expect(listed.statusCode).toBe(200)
+      expect((listed.json() as { categories: Array<{ id: string }> }).categories.some((entry) => entry.id === category.id)).toBe(true)
+    } finally {
+      await app.close()
+    }
+  })
+
   it('menu → order → payment → invoice → void → kitchen full flow', async () => {
     const app = await buildApp()
     try {
