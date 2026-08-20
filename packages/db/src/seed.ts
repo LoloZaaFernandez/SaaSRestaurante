@@ -88,6 +88,7 @@ async function run(): Promise<void> {
     for (const table of [
       'order_items',
       'payments',
+      'invoices',
       'orders',
       'shifts',
       'tables',

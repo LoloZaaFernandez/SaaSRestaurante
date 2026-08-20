@@ -9,12 +9,12 @@ export default function OrdersPage() {
   const [lines, setLines] = useState<OrderLine[]>([]);
 
   useEffect(() => {
-    apiFetch<{ items: MenuItem[] }>("/api/menu")
+    apiFetch<{ items: MenuItem[] }>("/menu/items")
       .then((data) => setItems(data.items))
       .catch(() => setItems([]));
   }, []);
 
-  const menuItems = items.filter((item) => item.available);
+  const menuItems = items.filter((item) => item.active);
 
   function addToOrder(item: MenuItem) {
     setLines((prev) => {
@@ -22,7 +22,7 @@ export default function OrdersPage() {
       if (existing) {
         return prev.map((line) => (line.id === item.id ? { ...line, quantity: line.quantity + 1 } : line));
       }
-      return [...prev, { id: item.id, name: item.name, unitPrice: item.price, quantity: 1 }];
+      return [...prev, { id: item.id, name: item.name, unitPrice: Number(item.price), quantity: 1 }];
     });
   }
 
@@ -59,7 +59,7 @@ export default function OrdersPage() {
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-stone-900">{item.name}</p>
-                    <p className="text-xs text-stone-500">${item.price.toLocaleString("es-AR")}</p>
+                    <p className="text-xs text-stone-500">${Number(item.price).toLocaleString("es-AR")}</p>
                   </div>
                   <button
                     type="button"

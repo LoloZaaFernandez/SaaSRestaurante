@@ -10,8 +10,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email y contraseña son obligatorios." }, { status: 400 });
   }
 
-  const token = `mock-${Date.now()}`;
-  const response = NextResponse.json({ token, user: { email, role: "admin" } });
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+  const apiResponse = await fetch(`${apiUrl}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }).catch(() => null);
+
+  if (!apiResponse) {
+    return NextResponse.json({ error: "No se pudo conectar con la API." }, { status: 503 });
+  }
+
+  const data = (await apiResponse.json().catch(() => ({}))) as {
+    token?: string;
+    user?: unknown;
+    message?: string;
+  };
+
+  if (!apiResponse.ok || !data.token) {
+    return NextResponse.json(
+      { error: data.message ?? "Credenciales inválidas." },
+      { status: apiResponse.status || 401 },
+    );
+  }
+
+  const { token, user } = data;
+  const response = NextResponse.json({ token, user });
 
   response.cookies.set(SESSION_COOKIE, token, {
     httpOnly: false,

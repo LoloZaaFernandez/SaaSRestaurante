@@ -23,7 +23,7 @@ SaasRestaurante/
 ```ascii
 +------------------+      +-----------------+      +--------------+
 |  Browser (web)   |      |  apps/api       |      |  PostgreSQL  |
-|  Next.js 15      | ---> |  Fastify        | ---> |   (:5432)    |
+|  Next.js 15      | ---> |  Fastify        | ---> |   (:5433)    |
 |  Tailwind UI     | REST |  REST / JSON    |  SQL  |  RLS x tenant|
 +------------------+      +-----------------+      +--------------+
         ^                        |                        ^
