@@ -1,4 +1,4 @@
-import { readCookie, SESSION_COOKIE } from "@/lib/auth";
+import { clearSession, readCookie, SESSION_COOKIE } from "@/lib/auth";
 
 export type MenuItem = {
   id: string;
@@ -27,6 +27,43 @@ export type ModifierGroup = {
   max: number;
 };
 
+export type AnalyticsPeriod = { from: string; to: string };
+
+export type AnalyticsTableOccupancy = {
+  total: number;
+  occupied: number;
+  free: number;
+  reserved: number;
+  cleaning: number;
+};
+
+export type AnalyticsDashboard = {
+  period: AnalyticsPeriod;
+  metrics: {
+    salesToday: string;
+    ordersToday: number;
+    averageTicket: string;
+    openOrders: number;
+    tables: AnalyticsTableOccupancy;
+  };
+  topItems: Array<{ name: string; quantity: number; revenue: string }>;
+};
+
+export type AnalyticsDailySales = {
+  date: string;
+  sales: string;
+  orders: number;
+  payments: number;
+};
+
+export type AnalyticsReport = {
+  period: AnalyticsPeriod;
+  dailySales: AnalyticsDailySales[];
+  topItems: Array<{ name: string; quantity: number; revenue: string }>;
+  salesByHour: Array<{ hour: number; sales: string; orders: number }>;
+  totals: { sales: string; orders: number; averageTicket: string };
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -44,6 +81,12 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     headers,
   });
   if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    }
     throw new Error(`API ${path} respondió ${res.status}`);
   }
   return (await res.json()) as T;
