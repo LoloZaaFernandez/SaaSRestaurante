@@ -15,6 +15,8 @@ import { createOrdersModule } from './modules/orders/index.js'
 import { createInvoicesModule } from './modules/invoices/index.js'
 import { createKdsModule } from './modules/kds/index.js'
 import { createAnalyticsModule } from './modules/analytics/index.js'
+import { createShiftsModule } from './modules/shifts/index.js'
+import { createBranchesModule } from './modules/branches/index.js'
 
 export interface AuthPayload {
   sub: string
@@ -89,6 +91,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   await app.register(createInvoicesModule({ pool }))
   await app.register(createKdsModule({ pool }))
   await app.register(createAnalyticsModule({ pool }))
+  await app.register(createShiftsModule({ pool }))
+  await app.register(createBranchesModule({ pool }))
 
   app.addHook('onClose', async () => {
     await pool.end()

@@ -17,6 +17,10 @@ export const emitInvoiceSchema = z.object({
   customerDoc: z.enum(['dni', 'ruc']).nullable().optional(),
   customerDocNumber: z.string().min(1).max(20).nullable().optional(),
   customerName: z.string().min(1).max(120).nullable().optional(),
+}).superRefine((input, ctx) => {
+  if (input.comprobanteType === 'factura' && (input.customerDoc !== 'ruc' || !input.customerDocNumber)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customerDocNumber'], message: 'Factura requires a RUC' })
+  }
 })
 
 export type EmitInvoiceInput = z.infer<typeof emitInvoiceSchema>

@@ -204,6 +204,13 @@ export const shiftSchema = z.object({
   expectedTotal: moneySchema.nullable(),
 })
 
+export const shiftMovementTypeSchema = z.enum(['income', 'expense'])
+export const shiftMovementSchema = z.object({
+  id: z.string().uuid(), tenantId: z.string().uuid(), shiftId: z.string().uuid(),
+  type: shiftMovementTypeSchema, amount: moneySchema, description: z.string().min(1),
+  createdBy: z.string().uuid(), createdAt: z.string().datetime(),
+})
+
 export type Money = z.infer<typeof moneySchema>
 export type Tenant = z.infer<typeof tenantSchema>
 export type CreateTenant = z.infer<typeof createTenantSchema>
@@ -232,3 +239,5 @@ export type Invoice = z.infer<typeof invoiceSchema>
 export type ComprobanteType = z.infer<typeof comprobanteTypeSchema>
 export type InvoiceStatus = z.infer<typeof invoiceStatusSchema>
 export type Shift = z.infer<typeof shiftSchema>
+export type ShiftMovementType = z.infer<typeof shiftMovementTypeSchema>
+export type ShiftMovement = z.infer<typeof shiftMovementSchema>

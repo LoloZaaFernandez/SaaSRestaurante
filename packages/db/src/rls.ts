@@ -16,6 +16,7 @@ const TENANT_TABLES = [
   'order_items',
   'payments',
   'shifts',
+  'shift_movements',
 ]
 
 async function applyRls(): Promise<void> {

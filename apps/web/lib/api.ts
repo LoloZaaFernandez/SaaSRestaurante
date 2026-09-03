@@ -64,6 +64,22 @@ export type AnalyticsReport = {
   totals: { sales: string; orders: number; averageTicket: string };
 };
 
+export type Branch = { id: string; tenantId: string; name: string; address: string | null; phone: string | null; isActive: boolean };
+export type Order = {
+  id: string;
+  branchId: string;
+  tableId: string | null;
+  status: "open" | "paid" | "cancelled";
+  subtotal: string;
+  tax: string;
+  total: string;
+  tip: string;
+  items: Array<{ id: string; name: string; quantity: number; unitPrice: string; lineTotal: string }>;
+};
+export type Payment = { id: string; method: "cash" | "card" | "transfer" | "yape" | "plin"; amount: string; tip: string; amountReceived: string | null; change: string | null; receivedAt: string };
+export type Shift = { id: string; branchId: string; openedAt: string; closedAt: string | null; openingCash: string; closingCash: string | null; expectedTotal: string | null };
+export type Invoice = { id: string; comprobanteType: "boleta" | "factura"; serie: string; numero: number; customerDoc: "dni" | "ruc" | null; customerDocNumber: string | null; customerName: string | null; total: string };
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

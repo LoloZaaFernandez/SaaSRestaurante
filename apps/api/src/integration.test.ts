@@ -386,6 +386,23 @@ describe.runIf(dbReachable)('real db integration', () => {
       const orderAfterAdd = (addItem.json() as { order: { total: string; items: unknown[] } }).order
       expect(orderAfterAdd.items).toHaveLength(2)
 
+      const shift = await app.inject({
+        method: 'POST',
+        url: '/shifts',
+        headers,
+        payload: { branchId, openingCash: '100.00' },
+      })
+      expect(shift.statusCode).toBe(201)
+      const shiftId = (shift.json() as { shift: { id: string } }).shift.id
+
+      const movement = await app.inject({
+        method: 'POST',
+        url: `/shifts/${shiftId}/movements`,
+        headers,
+        payload: { type: 'income', amount: '10.00', description: 'Fondo adicional' },
+      })
+      expect(movement.statusCode).toBe(201)
+
       const pay = await app.inject({
         method: 'POST',
         url: `/orders/${order.id}/payments`,
@@ -399,6 +416,10 @@ describe.runIf(dbReachable)('real db integration', () => {
       }
       expect(payment).toMatchObject({ method: 'yape', amount: orderAfterAdd.total, change: '0.00' })
       expect(paidOrder.status).toBe('paid')
+
+      const payments = await app.inject({ method: 'GET', url: `/payments/${order.id}`, headers })
+      expect(payments.statusCode).toBe(200)
+      expect((payments.json() as { payments: unknown[] }).payments).toHaveLength(1)
 
       const invoiceRes = await app.inject({
         method: 'POST',
@@ -424,6 +445,18 @@ describe.runIf(dbReachable)('real db integration', () => {
       expect(invoice.numero).toBeGreaterThanOrEqual(1)
       expect(invoice.status).toBe('emitted')
       expect(invoice.total).toBe(orderAfterAdd.total)
+
+      const closeShift = await app.inject({
+        method: 'POST',
+        url: `/shifts/${shiftId}/close`,
+        headers,
+        payload: { closingCash: '110.00' },
+      })
+      expect(closeShift.statusCode).toBe(200)
+      expect((closeShift.json() as { shift: { expectedTotal: string; closingCash: string } }).shift).toMatchObject({
+        expectedTotal: '110.00',
+        closingCash: '110.00',
+      })
 
       const voidRes = await app.inject({
         method: 'POST',

@@ -27,4 +27,6 @@ export type {
   ComprobanteType,
   InvoiceStatus,
   Shift,
+  ShiftMovementType,
+  ShiftMovement,
 } from '../schemas/index.js'

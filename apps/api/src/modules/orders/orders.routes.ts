@@ -59,6 +59,12 @@ export async function registerOrderRoutes(
     return reply.code(201).send(result)
   })
 
+  app.get('/payments/:orderId', { onRequest: [app.authenticate] }, async (request) => {
+    const tenantId = requireTenantId(request)
+    const { orderId } = z.object({ orderId: uuidSchema }).parse(request.params)
+    return { payments: await ordersRepository.listPayments(orderId, tenantId) }
+  })
+
   app.post('/orders/:id/items', { onRequest: [app.authenticate] }, async (request, reply) => {
     const tenantId = requireTenantId(request)
     const { id } = z.object({ id: uuidSchema }).parse(request.params)
