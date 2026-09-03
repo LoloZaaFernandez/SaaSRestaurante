@@ -99,6 +99,9 @@ export class InvoicesRepository {
       if (order.status === 'cancelled') {
         throw new AppError(409, 'ORDER_CANCELLED', 'Cannot emit a comprobante for a cancelled order')
       }
+      if (order.status !== 'paid') {
+        throw new AppError(409, 'ORDER_NOT_PAID', 'Cannot emit a comprobante for an unpaid order')
+      }
 
       const existing = await queryOne<{ id: string }>(
         client,
@@ -109,7 +112,10 @@ export class InvoicesRepository {
         throw new AppError(409, 'INVOICE_ALREADY_EXISTS', 'Order already has a comprobante')
       }
 
-      // Serialize per (branch, serie): lock existing rows so concurrent emissions queue up.
+       // Lock the key, including when there are no existing invoices to lock.
+       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+         `${order.branch_id}:${serie}`,
+       ])
       await client.query('SELECT id FROM invoices WHERE branch_id = $1 AND serie = $2 FOR UPDATE', [
         order.branch_id,
         serie,

@@ -89,6 +89,7 @@ async function run(): Promise<void> {
       'order_items',
       'payments',
       'invoices',
+      'shift_movements',
       'orders',
       'shifts',
       'tables',

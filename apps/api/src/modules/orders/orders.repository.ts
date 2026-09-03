@@ -330,17 +330,24 @@ export class OrdersRepository {
       const order = await this.lockOrder(client, orderId)
       assertOpen(order)
 
+      if (toCents(input.amount) !== toCents(order.total)) {
+        throw new AppError(400, 'PAYMENT_AMOUNT_MISMATCH', 'Payment amount must match order total')
+      }
+
       const amountReceived = input.amountReceived ?? null
+      if (input.method === 'cash' && (amountReceived === null || toCents(amountReceived) < toCents(input.amount) + toCents(input.tip))) {
+        throw new AppError(400, 'INSUFFICIENT_CASH', 'Amount received is less than the amount due')
+      }
       const change =
         amountReceived !== null
-          ? fromCents(Math.max(toCents(amountReceived) - toCents(input.amount), 0))
+          ? fromCents(Math.max(toCents(amountReceived) - toCents(input.amount) - toCents(input.tip), 0))
           : null
 
       const paymentResult = await client.query<PaymentRow>(
-        `INSERT INTO payments (tenant_id, order_id, method, amount, tip, amount_received, change)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO payments (tenant_id, order_id, method, amount, tip, amount_received, change, shift_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT id FROM shifts WHERE branch_id = $8 AND closed_at IS NULL LIMIT 1))
          RETURNING id, tenant_id, order_id, method, amount, tip, amount_received, change, received_at`,
-        [tenantId, orderId, input.method, input.amount, input.tip, amountReceived, change],
+        [tenantId, orderId, input.method, input.amount, input.tip, amountReceived, change, order.branchId],
       )
       const payment = mapPayment(paymentResult.rows[0]!)
 
@@ -353,6 +360,17 @@ export class OrdersRepository {
       )
 
       return { payment, order: await this.reloadWithOrder(client, mapOrder(updated.rows[0]!)) }
+    })
+  }
+
+  async listPayments(orderId: string, tenantId: string): Promise<Payment[]> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<PaymentRow>(
+        `SELECT id, tenant_id, order_id, method, amount, tip, amount_received, change, received_at
+         FROM payments WHERE order_id = $1 ORDER BY received_at DESC`,
+        [orderId],
+      )
+      return result.rows.map(mapPayment)
     })
   }
 
