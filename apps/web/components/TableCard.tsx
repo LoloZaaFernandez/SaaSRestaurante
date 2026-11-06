@@ -1,9 +1,14 @@
+import type { Route } from "next";
+import Link from "next/link";
+
 export type TableStatus = "free" | "occupied" | "reserved" | "cleaning";
 
 export type TableCardProps = {
-  number: number;
+  label: string;
   seats: number;
   status: TableStatus;
+  /** Si se pasa, la tarjeta ofrece un acceso directo para tomar un pedido en esa mesa. */
+  orderHref?: string;
 };
 
 const STATUS_LABEL: Record<TableStatus, string> = {
@@ -33,7 +38,7 @@ export const TABLE_LEGEND = (Object.keys(STATUS_DOT) as TableStatus[]).map((stat
   dotClass: STATUS_DOT[status],
 }));
 
-export default function TableCard({ number, seats, status }: TableCardProps) {
+export default function TableCard({ label, seats, status, orderHref }: TableCardProps) {
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
@@ -42,8 +47,16 @@ export default function TableCard({ number, seats, status }: TableCardProps) {
           {STATUS_LABEL[status]}
         </span>
       </div>
-      <p className="mt-3 text-2xl font-semibold text-stone-900">Mesa {number}</p>
+      <p className="mt-3 text-2xl font-semibold text-stone-900">{label}</p>
       <p className="text-sm text-stone-500">{seats} comensales</p>
+      {orderHref && (
+        <Link
+          href={orderHref as Route}
+          className="mt-3 inline-block rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-700 transition hover:bg-amber-50"
+        >
+          Tomar pedido
+        </Link>
+      )}
     </div>
   );
 }
