@@ -1,4 +1,5 @@
 import type { Pool } from 'pg'
+import type { ModifierCatalog, ModifierGroupDetail } from '@saasrestaurante/contracts'
 import { queryOne, withTenant } from '../../shared/db.js'
 import { AppError } from '../../shared/errors.js'
 import type {
@@ -95,6 +96,50 @@ export class MenuService {
          ORDER BY position, name`,
       )
       return result.rows.map(mapCategory)
+    })
+  }
+
+  async getModifierCatalog(tenantId: string): Promise<ModifierCatalog> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const groups = await client.query<ModifierGroupRow>(
+        `SELECT id, tenant_id, name, required, min, max FROM modifier_groups ORDER BY name`,
+      )
+      const modifiers = await client.query<{
+        id: string
+        tenant_id: string
+        group_id: string
+        name: string
+        price_adjustment: string
+      }>(`SELECT id, tenant_id, group_id, name, price_adjustment FROM modifiers ORDER BY created_at, name`)
+      const assignments = await client.query<{ menu_item_id: string; modifier_group_id: string }>(
+        `SELECT menu_item_id, modifier_group_id FROM menu_item_modifiers ORDER BY modifier_group_id`,
+      )
+
+      const modifiersByGroup = new Map<string, ModifierGroupDetail['modifiers']>()
+      for (const row of modifiers.rows) {
+        const list = modifiersByGroup.get(row.group_id) ?? []
+        list.push({
+          id: row.id,
+          tenantId: row.tenant_id,
+          groupId: row.group_id,
+          name: row.name,
+          priceAdjustment: row.price_adjustment,
+        })
+        modifiersByGroup.set(row.group_id, list)
+      }
+
+      const itemGroups: Record<string, string[]> = {}
+      for (const row of assignments.rows) {
+        ;(itemGroups[row.menu_item_id] ??= []).push(row.modifier_group_id)
+      }
+
+      return {
+        groups: groups.rows.map((row) => ({
+          ...mapModifierGroup(row),
+          modifiers: modifiersByGroup.get(row.id) ?? [],
+        })),
+        itemGroups,
+      }
     })
   }
 

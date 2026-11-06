@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { AppError } from '../../shared/errors.js'
 import { isUniqueViolation } from '../../shared/db.js'
-import type { UsersRepository, UserRole, UserRow } from './users.repository.js'
+import type { StaffMemberRow, UsersRepository, UserRole, UserRow } from './users.repository.js'
 
 const SALT_ROUNDS = 10
 
@@ -30,6 +30,10 @@ export class AuthService {
 
   findById(id: string, tenantId: string): Promise<UserRow | null> {
     return this.usersRepository.findById(id, tenantId)
+  }
+
+  listStaff(tenantId: string, role?: UserRole): Promise<StaffMemberRow[]> {
+    return this.usersRepository.listActive(tenantId, role)
   }
 
   async registerInTenant(

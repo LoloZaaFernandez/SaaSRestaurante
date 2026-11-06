@@ -17,7 +17,12 @@ export async function registerMenuRoutes(app: FastifyInstance, menuService: Menu
     return { modifierGroups }
   })
 
-  app.post('/menu/modifier-groups', { onRequest: [app.authenticate] }, async (request, reply) => {
+  app.get('/menu/modifier-catalog', { onRequest: [app.authenticate] }, async (request) => {
+    const tenantId = requireTenantId(request)
+    return menuService.getModifierCatalog(tenantId)
+  })
+
+  app.post('/menu/modifier-groups',{ onRequest: [app.authenticate] }, async (request, reply) => {
     const tenantId = requireTenantId(request)
     const input = createModifierGroupSchema.parse(request.body)
     const modifierGroup = await menuService.createModifierGroup(tenantId, input)

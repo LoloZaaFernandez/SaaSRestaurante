@@ -107,12 +107,22 @@ interface ResolvedMenuItem {
   id: string
   name: string
   price: string
+  active: boolean
 }
 
 interface ResolvedModifier {
   id: string
+  groupId: string
   name: string
   priceAdjustment: string
+}
+
+interface ResolvedModifierGroup {
+  id: string
+  name: string
+  required: boolean
+  min: number
+  max: number
 }
 
 export class OrdersRepository {
@@ -125,13 +135,12 @@ export class OrdersRepository {
   ): Promise<Order> {
     return withTenant(this.pool, tenantId, async (client) => {
       await assertBranchAndTable(client, input.branchId, input.tableId)
+      const waiterId = await resolveWaiter(client, input.waiterId, createdBy)
 
-      const lines = await Promise.all(
-        input.items.map(async (item) => {
-          const resolved = await this.resolveLine(client, item)
-          return resolved
-        }),
-      )
+      const lines = []
+      for (const item of input.items) {
+        lines.push(await this.resolveLine(client, item))
+      }
 
       const subtotal = addMoney(lines.map((line) => line.lineTotal))
       const tax = applyTax(subtotal)
@@ -141,15 +150,15 @@ export class OrdersRepository {
         `INSERT INTO orders (tenant_id, branch_id, table_id, created_by, waiter_id, subtotal, tax, total)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING ${ORDER_COLUMNS}`,
-        [tenantId, input.branchId, input.tableId ?? null, createdBy, createdBy, subtotal, tax, total],
+        [tenantId, input.branchId, input.tableId ?? null, createdBy, waiterId, subtotal, tax, total],
       )
       const order = orderResult.rows[0]!
 
       const items: OrderItem[] = []
       for (const line of lines) {
         const itemResult = await client.query<OrderItemRow>(
-          `INSERT INTO order_items (tenant_id, order_id, menu_item_id, name, unit_price, quantity, line_total, modifiers)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `INSERT INTO order_items (tenant_id, order_id, menu_item_id, name, unit_price, quantity, line_total, modifiers, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            RETURNING ${ORDER_ITEM_COLUMNS}`,
           [
             tenantId,
@@ -160,6 +169,7 @@ export class OrdersRepository {
             line.quantity,
             line.lineTotal,
             JSON.stringify(line.modifiers),
+            line.notes,
           ],
         )
         items.push(mapItem(itemResult.rows[0]!))
@@ -183,8 +193,9 @@ export class OrdersRepository {
       const existing = await queryOne<{ id: string; quantity: number }>(
         client,
         `SELECT id, quantity FROM order_items
-         WHERE order_id = $1 AND menu_item_id = $2 AND modifiers = $3::jsonb`,
-        [orderId, line.menuItemId, JSON.stringify(line.modifiers)],
+         WHERE order_id = $1 AND menu_item_id = $2 AND modifiers = $3::jsonb
+           AND notes IS NOT DISTINCT FROM $4::text`,
+        [orderId, line.menuItemId, JSON.stringify(line.modifiers), line.notes],
       )
 
       if (existing) {
@@ -196,8 +207,8 @@ export class OrdersRepository {
         )
       } else {
         await client.query(
-          `INSERT INTO order_items (tenant_id, order_id, menu_item_id, name, unit_price, quantity, line_total, modifiers)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO order_items (tenant_id, order_id, menu_item_id, name, unit_price, quantity, line_total, modifiers, notes)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             tenantId,
             orderId,
@@ -207,6 +218,7 @@ export class OrdersRepository {
             line.quantity,
             line.lineTotal,
             JSON.stringify(line.modifiers),
+            line.notes,
           ],
         )
       }
@@ -217,11 +229,15 @@ export class OrdersRepository {
 
   async listOrders(
     tenantId: string,
-    filters: { branchId?: string; status?: OrderStatus } = {},
+    filters: { branchId?: string; status?: OrderStatus; limit?: number } = {},
   ): Promise<Order[]> {
     return withTenant(this.pool, tenantId, async (client) => {
-      const conditions: string[] = ['status != ALL($1::text[])']
-      const params: unknown[] = [['cancelled']]
+      // Cancelled orders are hidden by default; they are only returned when asked for explicitly.
+      const conditions: string[] = []
+      const params: unknown[] = []
+      if (!filters.status) {
+        conditions.push(`status <> 'cancelled'`)
+      }
       if (filters.branchId) {
         params.push(filters.branchId)
         conditions.push(`branch_id = $${params.length}`)
@@ -232,8 +248,8 @@ export class OrdersRepository {
       }
       const result = await client.query<OrderRow>(
         `SELECT ${ORDER_COLUMNS} FROM orders
-         WHERE ${conditions.join(' AND ')}
-         ORDER BY opened_at DESC`,
+         ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+         ORDER BY opened_at DESC${filters.limit ? ` LIMIT ${Math.trunc(filters.limit)}` : ''}`,
         params,
       )
       const orders = result.rows.map((row) => mapOrder(row))
@@ -415,34 +431,22 @@ export class OrdersRepository {
     quantity: number
     lineTotal: string
     modifiers: OrderItemModifier[]
+    notes: string | null
   }> {
     const menuItem = await queryOne<ResolvedMenuItem>(
       client,
-      `SELECT id, name, price FROM menu_items WHERE id = $1`,
+      `SELECT id, name, price, active FROM menu_items WHERE id = $1`,
       [item.menuItemId],
     )
     if (!menuItem) {
       throw new AppError(404, 'MENU_ITEM_NOT_FOUND', `Menu item not found: ${item.menuItemId}`)
     }
-
-    let modifiers: OrderItemModifier[] = []
-    let adjustmentCents = 0
-    if (item.modifiers.length > 0) {
-      const result = await client.query<ResolvedModifier>(
-        `SELECT id, name, price_adjustment FROM modifiers WHERE id = ANY($1::uuid[])`,
-        [item.modifiers],
-      )
-      const byId = new Map(result.rows.map((row) => [row.id, row]))
-      for (const id of item.modifiers) {
-        const modifier = byId.get(id)
-        if (!modifier) {
-          throw new AppError(404, 'MODIFIER_NOT_FOUND', `Modifier not found: ${id}`)
-        }
-        modifiers.push({ modifierId: modifier.id, name: modifier.name, priceAdjustment: modifier.priceAdjustment })
-        adjustmentCents += toCents(modifier.priceAdjustment)
-      }
+    if (!menuItem.active) {
+      throw new AppError(409, 'MENU_ITEM_UNAVAILABLE', `Menu item is not available: ${menuItem.name}`)
     }
 
+    const modifiers = await this.resolveModifiers(client, menuItem, item.modifiers)
+    const adjustmentCents = modifiers.reduce((acc, modifier) => acc + toCents(modifier.priceAdjustment), 0)
     const unitPrice = fromCents(toCents(menuItem.price) + adjustmentCents)
     const lineTotal = multiplyByQuantity(unitPrice, item.quantity)
 
@@ -453,7 +457,81 @@ export class OrdersRepository {
       quantity: item.quantity,
       lineTotal,
       modifiers,
+      notes: item.notes ?? null,
     }
+  }
+
+  /**
+   * Validates the chosen modifier ids against the groups assigned to the menu item
+   * (menu_item_modifiers) and each group's required/min/max limits, and returns the
+   * snapshots (name + price adjustment at order time) in the order requested.
+   */
+  private async resolveModifiers(
+    client: PoolClient,
+    menuItem: ResolvedMenuItem,
+    modifierIds: string[],
+  ): Promise<OrderItemModifier[]> {
+    if (new Set(modifierIds).size !== modifierIds.length) {
+      throw new AppError(400, 'DUPLICATE_MODIFIER', `A modifier was selected more than once for ${menuItem.name}`)
+    }
+
+    const groupsResult = await client.query<ResolvedModifierGroup>(
+      `SELECT g.id, g.name, g.required, g.min, g.max
+       FROM menu_item_modifiers mim
+       JOIN modifier_groups g ON g.id = mim.modifier_group_id
+       WHERE mim.menu_item_id = $1`,
+      [menuItem.id],
+    )
+    const groups = new Map(groupsResult.rows.map((group) => [group.id, group]))
+
+    const selected = new Map<string, ResolvedModifier>()
+    if (modifierIds.length > 0) {
+      const result = await client.query<ResolvedModifier>(
+        `SELECT id, group_id AS "groupId", name, price_adjustment AS "priceAdjustment"
+         FROM modifiers WHERE id = ANY($1::uuid[])`,
+        [modifierIds],
+      )
+      for (const row of result.rows) selected.set(row.id, row)
+    }
+
+    const countByGroup = new Map<string, number>()
+    const snapshots: OrderItemModifier[] = []
+    for (const id of modifierIds) {
+      const modifier = selected.get(id)
+      if (!modifier) {
+        throw new AppError(404, 'MODIFIER_NOT_FOUND', `Modifier not found: ${id}`)
+      }
+      if (!groups.has(modifier.groupId)) {
+        throw new AppError(
+          400,
+          'MODIFIER_NOT_ALLOWED',
+          `Modifier "${modifier.name}" is not available for ${menuItem.name}`,
+        )
+      }
+      countByGroup.set(modifier.groupId, (countByGroup.get(modifier.groupId) ?? 0) + 1)
+      snapshots.push({ modifierId: modifier.id, name: modifier.name, priceAdjustment: modifier.priceAdjustment })
+    }
+
+    for (const group of groups.values()) {
+      const count = countByGroup.get(group.id) ?? 0
+      const minimum = group.required ? Math.max(group.min, 1) : group.min
+      if (count < minimum) {
+        throw new AppError(
+          400,
+          'MODIFIER_GROUP_MIN',
+          `${menuItem.name}: choose at least ${minimum} option(s) from "${group.name}"`,
+        )
+      }
+      if (count > group.max) {
+        throw new AppError(
+          400,
+          'MODIFIER_GROUP_MAX',
+          `${menuItem.name}: choose at most ${group.max} option(s) from "${group.name}"`,
+        )
+      }
+    }
+
+    return snapshots
   }
 
   private async lockOrder(client: PoolClient, orderId: string): Promise<Omit<Order, 'items'>> {
@@ -514,20 +592,55 @@ async function assertBranchAndTable(
   branchId: string,
   tableId: string | null | undefined,
 ): Promise<void> {
-  const branch = await queryOne<{ id: string }>(client, 'SELECT id FROM branches WHERE id = $1', [
-    branchId,
-  ])
+  const branch = await queryOne<{ id: string; is_active: boolean }>(
+    client,
+    'SELECT id, is_active FROM branches WHERE id = $1',
+    [branchId],
+  )
   if (!branch) {
     throw new AppError(404, 'BRANCH_NOT_FOUND', 'Branch not found')
   }
+  if (!branch.is_active) {
+    throw new AppError(409, 'BRANCH_INACTIVE', 'Branch is not active')
+  }
   if (tableId) {
-    const table = await queryOne<{ id: string }>(client, 'SELECT id FROM tables WHERE id = $1', [
-      tableId,
-    ])
+    const table = await queryOne<{ id: string; branch_id: string }>(
+      client,
+      'SELECT id, branch_id FROM tables WHERE id = $1',
+      [tableId],
+    )
     if (!table) {
       throw new AppError(404, 'TABLE_NOT_FOUND', 'Table not found')
     }
+    if (table.branch_id !== branchId) {
+      throw new AppError(400, 'TABLE_BRANCH_MISMATCH', 'Table does not belong to the selected branch')
+    }
   }
+}
+
+/**
+ * The waiter defaults to the user creating the order (previous behaviour). An explicit
+ * waiterId must be an active user of the same tenant (RLS scopes the lookup) with role 'waiter'.
+ * Users are not tied to a branch in the schema, so no branch check is possible.
+ */
+async function resolveWaiter(
+  client: PoolClient,
+  waiterId: string | null | undefined,
+  createdBy: string,
+): Promise<string> {
+  if (!waiterId || waiterId === createdBy) return createdBy
+  const waiter = await queryOne<{ id: string; role: string; active: boolean }>(
+    client,
+    'SELECT id, role, active FROM users WHERE id = $1',
+    [waiterId],
+  )
+  if (!waiter) {
+    throw new AppError(404, 'WAITER_NOT_FOUND', 'Waiter not found')
+  }
+  if (!waiter.active || waiter.role !== 'waiter') {
+    throw new AppError(400, 'INVALID_WAITER', 'The selected user is not an active waiter')
+  }
+  return waiter.id
 }
 
 function mapPayment(row: PaymentRow): Payment {

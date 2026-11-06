@@ -361,7 +361,12 @@ describe.runIf(dbReachable)('real db integration', () => {
       expect(menu.statusCode).toBe(200)
       const items = (menu.json() as { items: Array<{ id: string; name: string; price: string }> }).items
       expect(items.length).toBeGreaterThanOrEqual(10)
-      const [itemA, itemB] = [items[0]!, items[1]!]
+      // orders now enforce required modifier groups, so use items that have none
+      const catalog = (await app.inject({ method: 'GET', url: '/menu/modifier-catalog', headers })).json() as {
+        itemGroups: Record<string, string[]>
+      }
+      const simpleItems = items.filter((entry) => !catalog.itemGroups[entry.id])
+      const [itemA, itemB] = [simpleItems[0]!, simpleItems[1]!]
 
       const createOrder = await app.inject({
         method: 'POST',

@@ -4,7 +4,9 @@ export const moneySchema = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Amount must be
 
 export const tenantStatusSchema = z.enum(['active', 'suspended', 'cancelled'])
 
-export const userRoleSchema = z.enum(['owner', 'admin', 'waiter', 'kitchen', 'cashier'])
+export const ORDER_ITEM_NOTES_MAX_LENGTH = 200
+
+export const userRoleSchema =z.enum(['owner', 'admin', 'waiter', 'kitchen', 'cashier'])
 
 export const tableStatusSchema = z.enum(['free', 'occupied', 'reserved', 'cleaning'])
 
@@ -99,6 +101,21 @@ export const modifierSchema = z.object({
   priceAdjustment: moneySchema,
 })
 
+export const modifierGroupDetailSchema = modifierGroupSchema.extend({
+  modifiers: z.array(modifierSchema),
+})
+
+export const modifierCatalogSchema = z.object({
+  groups: z.array(modifierGroupDetailSchema),
+  itemGroups: z.record(z.string().uuid(), z.array(z.string().uuid())),
+})
+
+export const staffMemberSchema = z.object({
+  id: z.string().uuid(),
+  fullName: z.string().min(1),
+  role: userRoleSchema,
+})
+
 export const tableSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
@@ -113,11 +130,18 @@ export const orderItemInputSchema = z.object({
   menuItemId: z.string().uuid(),
   quantity: z.number().int().positive(),
   modifiers: z.array(z.string().uuid()).default([]),
+  notes: z
+    .string()
+    .trim()
+    .max(ORDER_ITEM_NOTES_MAX_LENGTH)
+    .nullish()
+    .transform((value) => (value ? value : null)),
 })
 
 export const createOrderSchema = z.object({
   branchId: z.string().uuid(),
   tableId: z.string().uuid().nullish(),
+  waiterId: z.string().uuid().nullish(),
   items: z.array(orderItemInputSchema).min(1),
 })
 
@@ -216,6 +240,9 @@ export type MenuCategory = z.infer<typeof menuCategorySchema>
 export type MenuItem = z.infer<typeof menuItemSchema>
 export type ModifierGroup = z.infer<typeof modifierGroupSchema>
 export type Modifier = z.infer<typeof modifierSchema>
+export type ModifierGroupDetail = z.infer<typeof modifierGroupDetailSchema>
+export type ModifierCatalog = z.infer<typeof modifierCatalogSchema>
+export type StaffMember = z.infer<typeof staffMemberSchema>
 export type Table = z.infer<typeof tableSchema>
 export type TableStatus = z.infer<typeof tableStatusSchema>
 export type TableKind = z.infer<typeof tableKindSchema>

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { loginSchema } from '@saasrestaurante/contracts'
+import { loginSchema, userRoleSchema } from '@saasrestaurante/contracts'
 import type { AuthService } from './auth.service.js'
 import { AppError } from '../../shared/errors.js'
 import { config } from '../../shared/config.js'
@@ -44,7 +44,14 @@ export async function registerAuthRoutes(app: FastifyInstance, authService: Auth
     return reply.code(201).send({ user })
   })
 
-  app.get('/auth/me', { onRequest: [app.authenticate] }, async (request, reply) => {
+  // Active users of the caller's tenant (id, name, role only). Used to pick a waiter.
+  app.get('/users', { onRequest: [app.authenticate] }, async (request) => {
+    const tenantId = requireTenantId(request)
+    const { role } = z.object({ role: userRoleSchema.optional() }).parse(request.query)
+    return { users: await authService.listStaff(tenantId, role) }
+  })
+
+  app.get('/auth/me',{ onRequest: [app.authenticate] }, async (request, reply) => {
     const user = await authService.findById(request.user.sub, request.user.tenantId)
     if (!user) {
       throw new AppError(401, 'UNAUTHENTICATED', 'User no longer exists')
