@@ -15,6 +15,12 @@ export interface UserRow {
   updatedAt: string
 }
 
+export interface StaffMemberRow {
+  id: string
+  fullName: string
+  role: UserRole
+}
+
 export interface CreateUserInput {
   tenantId: string
   email: string
@@ -83,6 +89,18 @@ export class UsersRepository {
         [id],
       )
       return row ? mapUser(row) : null
+    })
+  }
+
+  async listActive(tenantId: string, role?: UserRole): Promise<StaffMemberRow[]> {
+    return withTenant(this.pool, tenantId, async (client) => {
+      const result = await client.query<{ id: string; full_name: string; role: string }>(
+        `SELECT id, full_name, role FROM users
+         WHERE active = true AND ($1::text IS NULL OR role = $1)
+         ORDER BY full_name, id`,
+        [role ?? null],
+      )
+      return result.rows.map((row) => ({ id: row.id, fullName: row.full_name, role: row.role as UserRole }))
     })
   }
 

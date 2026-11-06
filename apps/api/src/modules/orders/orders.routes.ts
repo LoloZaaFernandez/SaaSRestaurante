@@ -16,6 +16,7 @@ export async function registerOrderRoutes(
       .object({
         branchId: z.string().uuid().optional(),
         status: orderStatusSchema.optional(),
+        limit: z.coerce.number().int().min(1).max(200).optional(),
       })
       .parse(request.query)
     const orders = await ordersRepository.listOrders(tenantId, query)
