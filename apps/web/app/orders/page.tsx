@@ -175,7 +175,12 @@ export default function OrdersPage() {
       branchId: branchId || null,
       tableId: tableChoice || null,
       waiterId: waiterId || null,
-      lines: lines.map(({ key: _key, ...rest }) => rest),
+      lines: lines.map((line) => ({
+        menuItemId: line.menuItemId,
+        quantity: line.quantity,
+        modifierIds: line.modifierIds,
+        notes: line.notes,
+      })),
     });
   }, [branchId, tableChoice, waiterId, lines]);
 
